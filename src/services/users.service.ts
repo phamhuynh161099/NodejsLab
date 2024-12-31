@@ -56,7 +56,7 @@ const signAccessAndRefreshToken = (user_id: string) => {
 
 const register = async (payload: RegisterReqBody) => {
   const { nanoid } = await import('nanoid'); // use dynamic import()
-  const randomId = nanoid(10);
+  const randomId = nanoid(20);
   const email_verify_token = await signEmailVerifyToken(randomId);
 
   const { username, password, email } = payload;
