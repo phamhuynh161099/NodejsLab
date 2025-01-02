@@ -1,10 +1,13 @@
 import { NextFunction, Request, Response } from "express";
 import { checkSchema, ParamSchema } from "express-validator";
 import { JsonWebTokenError } from "jsonwebtoken";
+import { capitalize, trim } from "lodash";
+import { UserVerifyStatus } from "~/constants/enum";
 import HTTP_STATUS from "~/constants/httpStatus";
 import { USERS_MESSAGES } from "~/constants/messages";
 import { ErrorWithStatus } from "~/models/Error";
 import UserService from "~/services/users.service";
+import { hashPassword } from "~/utils/crypto";
 import { verifyToken } from "~/utils/jwt";
 import { validate } from "~/utils/validation";
 
@@ -267,6 +270,285 @@ export const emailVerifyTokenValidator = validate(
                 message: (error as JsonWebTokenError).message,
                 status: HTTP_STATUS.UNAUTHORIZED
               })
+            }
+
+            return true
+          }
+        }
+      },
+    },
+    ['body']
+  )
+)
+
+export const forgotPasswordValidator = validate(
+  checkSchema(
+    {
+      email: {
+        isEmail: {
+          errorMessage: USERS_MESSAGES.EMAIL_IS_INVALID
+        },
+        trim: true,
+        custom: {
+          options: async (value: any, { req }) => {
+            const user = await UserService.findUserByEmail({ email: value });
+            if (!user) {
+              throw new Error(USERS_MESSAGES.USER_NOT_FOUND)
+            }
+
+            req.user = user;
+            return true
+          }
+        }
+      },
+    },
+    ['body']
+  )
+)
+
+export const verifyForgotPasswordTokenValidator = validate(
+  checkSchema(
+    {
+      forgot_password_token: {
+        trim: true,
+        custom: {
+          options: async (value: string, { req }: any) => {
+            if (!value) {
+              throw new ErrorWithStatus({
+                message: USERS_MESSAGES.FORGOT_PASSWORD_TOKEN_IS_REQUIRED,
+                status: HTTP_STATUS.UNAUTHORIZED
+              })
+            }
+
+            try {
+              const decode_forgot_password_token = await verifyToken({
+                token: value,
+                secretOrPublicKey: process.env.JWT_SECRET_FORGOT_PASSWORD_TOKEN as string
+              });
+
+              const { user_id } = decode_forgot_password_token;
+              const user = await UserService.checkUserExist({ user_id });
+
+              if (!user) {
+                throw new ErrorWithStatus({
+                  message: USERS_MESSAGES.USED_REFRESH_TOKEN_OR_NOT_EXIST,
+                  status: HTTP_STATUS.UNAUTHORIZED,
+                });
+              }
+
+              if (user.forgot_password_token !== value) {
+                throw new ErrorWithStatus({
+                  message: USERS_MESSAGES.INVALID_FORGOT_PASSWORD_TOKEN,
+                  status: HTTP_STATUS.UNAUTHORIZED,
+                });
+              }
+
+
+            } catch (error) {
+              if (error instanceof JsonWebTokenError) {
+                throw new ErrorWithStatus({
+                  message: capitalize(error.message),
+                  status: HTTP_STATUS.UNAUTHORIZED
+                });
+              }
+
+              throw error;
+            }
+
+            return true
+          }
+        }
+      },
+    },
+    ['body']
+  )
+)
+
+export const resetPasswordValidator = validate(
+  checkSchema(
+    {
+      forgot_password_token: {
+        trim: true,
+        custom: {
+          options: async (value: string, { req }: any) => {
+            if (!value) {
+              throw new ErrorWithStatus({
+                message: USERS_MESSAGES.FORGOT_PASSWORD_TOKEN_IS_REQUIRED,
+                status: HTTP_STATUS.UNAUTHORIZED
+              })
+            }
+
+            try {
+              const decode_forgot_password_token = await verifyToken({
+                token: value,
+                secretOrPublicKey: process.env.JWT_SECRET_FORGOT_PASSWORD_TOKEN as string
+              });
+
+              const { user_id } = decode_forgot_password_token;
+              const user = await UserService.checkUserExist({ user_id });
+
+              if (!user) {
+                throw new ErrorWithStatus({
+                  message: USERS_MESSAGES.USED_REFRESH_TOKEN_OR_NOT_EXIST,
+                  status: HTTP_STATUS.UNAUTHORIZED,
+                });
+              }
+
+              if (user.forgot_password_token !== value) {
+                throw new ErrorWithStatus({
+                  message: USERS_MESSAGES.INVALID_FORGOT_PASSWORD_TOKEN,
+                  status: HTTP_STATUS.UNAUTHORIZED,
+                });
+              }
+
+              req.decode_forgot_password_token = decode_forgot_password_token
+
+            } catch (error) {
+              if (error instanceof JsonWebTokenError) {
+                throw new ErrorWithStatus({
+                  message: capitalize(error.message),
+                  status: HTTP_STATUS.UNAUTHORIZED
+                });
+              }
+
+              throw error;
+            }
+
+            return true
+          }
+        }
+      },
+      password: passwordSchema,
+      // confirm_password: confirmPasswordSchema,
+    },
+    ['body']
+  )
+)
+
+export const verifiedUserValidator = (req: Request, res: Response, next: NextFunction) => {
+  const { verify } = req.decode_authorization;
+
+  console.log('verify', verify)
+  if (verify !== UserVerifyStatus.Verified) {
+    throw new ErrorWithStatus({
+      message: USERS_MESSAGES.USER_NOT_VERIFIED,
+      status: HTTP_STATUS.FORBIDDEN
+    });
+
+    return;
+  }
+
+  next();
+}
+
+export const updateMeValidator = validate(
+  checkSchema(
+    {
+      username: {
+        optional: true
+      },
+      avatar: {
+        optional: true,
+        isString: {
+          errorMessage: USERS_MESSAGES.IMAGE_URL_MUST_BE_STRING
+        },
+        trim: true,
+        isLength: {
+          options: {
+            min: 1,
+            max: 400
+          },
+          errorMessage: USERS_MESSAGES.IMAGE_URL_LENGTH
+        }
+      },
+      cover_photo: {
+        optional: true,
+        isString: {
+          errorMessage: USERS_MESSAGES.IMAGE_URL_MUST_BE_STRING
+        },
+        trim: true,
+        isLength: {
+          options: {
+            min: 1,
+            max: 400
+          },
+          errorMessage: USERS_MESSAGES.IMAGE_URL_LENGTH
+        }
+      },
+
+      // confirm_password: confirmPasswordSchema,
+    },
+    ['body']
+  )
+)
+
+export const followValidator = validate(
+  checkSchema(
+    {
+      follow_user_id: {
+        custom: {
+          options: async (value: string, { req }) => {
+            const followed_user = await UserService.checkUserExist({ user_id: value });
+            if (!followed_user) {
+              throw new ErrorWithStatus({
+                message: USERS_MESSAGES.USER_NOT_FOUND,
+                status: HTTP_STATUS.NOT_FOUND,
+              })
+            }
+
+
+            return true
+          }
+        }
+      },
+    },
+    ['body']
+  )
+)
+
+export const unfollowValidator = validate(
+  checkSchema(
+    {
+      user_id: {
+        custom: {
+          options: async (value: string, { req }) => {
+            const followed_user = await UserService.checkUserExist({ user_id: value });
+            if (!followed_user) {
+              throw new ErrorWithStatus({
+                message: USERS_MESSAGES.USER_NOT_FOUND,
+                status: HTTP_STATUS.NOT_FOUND,
+              })
+            }
+            return true
+          }
+        }
+      },
+    },
+    ['params']
+  )
+)
+
+export const changePasswordValidator = validate(
+  checkSchema(
+    {
+      old_password: {
+        custom: {
+          options: async (value: string, { req }) => {
+            const { user_id } = (req as Request).decode_authorization
+            const user = await UserService.checkUserExist({ user_id });
+            if (!user) {
+              throw new ErrorWithStatus({
+                message: USERS_MESSAGES.USER_NOT_FOUND,
+                status: HTTP_STATUS.NOT_FOUND,
+              })
+            }
+
+            let handledPassword = hashPassword(value);
+            if (handledPassword !== user.password) {
+              throw new ErrorWithStatus({
+                message: USERS_MESSAGES.OLD_PASSWORD_NOT_MATCH,
+                status: HTTP_STATUS.UNAUTHORIZED
+              });
             }
 
             return true
