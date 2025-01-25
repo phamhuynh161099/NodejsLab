@@ -10,5 +10,6 @@ declare module 'express' {
     decode_authorization?: Jwt.JwtPayload,
     user?: any,
     decode_forgot_password_token?:Jwt.JwtPayload,
+    decode_refresh_token?:Jwt.JwtPayload,
   }
 }

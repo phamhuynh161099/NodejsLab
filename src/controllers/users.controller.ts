@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import { ParamsDictionary } from 'express-serve-static-core'
 import UserService from "~/services/users.service";
-import jwt from 'jsonwebtoken'
+import jwt, { JwtPayload } from 'jsonwebtoken'
 import HTTP_STATUS from "~/constants/httpStatus";
 import { USERS_MESSAGES } from "~/constants/messages";
 import { UserVerifyStatus } from "~/constants/enum";
@@ -37,6 +37,19 @@ export const logoutController = async (req: Request<ParamsDictionary, any, any>,
     result
   });
 
+  return;
+}
+
+
+export const refreshTokenController = async (req: Request, res: Response, next: NextFunction) => {
+  const { user_id, verify , exp} = req.decode_refresh_token; 
+  const { refresh_token } = req.body;
+  const result = await UserService.refreshToken({ user_id, verify, refresh_token, exp})
+
+  res.status(200).json({
+    message: USERS_MESSAGES.REFRESH_TOKEN_SUCCESS,
+    result
+  });
   return;
 }
 

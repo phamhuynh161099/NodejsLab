@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { emailVerifyController, followController, forgotPasswordController, getMeController, getProfileController, loginController, logoutController, registerController, resendEmailVerifyController, resetPasswordController, unfollowController, updateMeController, verifyForgotPasswordTokenController } from "~/controllers/users.controller";
+import { emailVerifyController, followController, forgotPasswordController, getMeController, getProfileController, loginController, logoutController, refreshTokenController, registerController, resendEmailVerifyController, resetPasswordController, unfollowController, updateMeController, verifyForgotPasswordTokenController } from "~/controllers/users.controller";
 import { filterMiddleware } from "~/middlewares/common.middleware";
 import { accessTokenValidator, changePasswordValidator, emailVerifyTokenValidator, followValidator, forgotPasswordValidator, loginValidator, refreshTokenValidator, registerValidator, resetPasswordValidator, unfollowValidator, updateMeValidator, verifiedUserValidator, verifyForgotPasswordTokenValidator } from "~/middlewares/users.middlewares";
 import { wrapRequest } from "~/utils/handler";
@@ -10,6 +10,17 @@ const usersRouter = Router();
 usersRouter.post('/login', loginValidator, wrapRequest(loginController));
 usersRouter.post('/register', registerValidator, wrapRequest(registerController));
 usersRouter.post('/logout', accessTokenValidator, refreshTokenValidator, logoutController);
+
+/**
+ * Description. Refresh Token
+ * Path: /refresh-token
+ * Method: POST
+ * Body: { refresh_token:string }
+ */
+usersRouter.post('/refresh-token',
+  refreshTokenValidator,
+  wrapRequest(refreshTokenController)
+);
 
 
 /**

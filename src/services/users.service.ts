@@ -24,7 +24,22 @@ const signAccessToken = ({ user_id, verify }: { user_id: string, verify: UserVer
   })
 }
 
-const signRefreshToken = ({ user_id, verify }: { user_id: string, verify: UserVerifyStatus }) => {
+const signRefreshToken = ({ user_id, verify, exp }: { user_id: string, verify: UserVerifyStatus, exp?: number }) => {
+  if (exp) {
+    return signToken({
+      payload: {
+        user_id,
+        token_type: TokenType.RefreshToken,
+        verify,
+        exp
+      },
+      privateKey: process.env.JWT_SECRET_REFRESH_TOKEN as string,
+      options: {
+        // expiresIn: process.env.REFRESH_TOKEN_EXP_IN
+      }
+    })
+  }
+
   return signToken({
     payload: {
       user_id,
@@ -187,12 +202,12 @@ export const verifyEmail = async (payload: { user_id: string }) => {
 
   const [access_token, refresh_token] = await signAccessAndRefreshToken({ user_id, verify: UserVerifyStatus.Verified });
   const sql_refresh_tokens = `INSERT INTO refresh_tokens (token, user_id, iat, exp) VALUES (?, ?, ?, ?)`;
-    const [result_refresh_tokens]: [ResultSetHeader, FieldPacket[]] =
-      await pool.query(sql_refresh_tokens, [
-        refresh_token,
-        user_id,
-        process.env.ACCESS_TOKEN_EXP_IN,
-        process.env.REFRESH_TOKEN_EXP_IN]);
+  const [result_refresh_tokens]: [ResultSetHeader, FieldPacket[]] =
+    await pool.query(sql_refresh_tokens, [
+      refresh_token,
+      user_id,
+      process.env.ACCESS_TOKEN_EXP_IN,
+      process.env.REFRESH_TOKEN_EXP_IN]);
 
 
   return {
@@ -354,6 +369,32 @@ export const changePassword = async (payload: { user_id: string, password: strin
 
 };
 
+export const refreshToken = async (payload: { user_id: string, verify: UserVerifyStatus, refresh_token: string, exp: number }) => {
+  const { user_id, verify, refresh_token, exp } = payload;
+
+  const sql = `DELETE FROM refresh_tokens WHERE token = ?`;
+  const [new_access_token, new_refresh_token] = await Promise.all([
+    signAccessToken({ user_id, verify }),
+    signRefreshToken({ user_id, verify, exp }),
+    pool.query<OkPacket>(sql, [refresh_token])
+  ]);
+
+
+  // Insert refresh token vao DB
+  const sql_refresh_tokens = `INSERT INTO refresh_tokens (token, user_id, iat, exp) VALUES (?, ?, ?, ?)`;
+  const [result_refresh_tokens]: [ResultSetHeader, FieldPacket[]] =
+    await pool.query(sql_refresh_tokens, [
+      refresh_token,
+      user_id,
+      process.env.ACCESS_TOKEN_EXP_IN,
+      process.env.REFRESH_TOKEN_EXP_IN]);
+
+  return {
+    access_token: new_access_token,
+    refresh_token: new_refresh_token
+  }
+}
+
 const UserService = {
   register,
   checkEmailExist,
@@ -372,6 +413,7 @@ const UserService = {
   getProfile,
   follow,
   unfollow,
-  changePassword
+  changePassword,
+  refreshToken
 };
 export default UserService
